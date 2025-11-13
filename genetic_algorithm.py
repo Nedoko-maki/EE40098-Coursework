@@ -1,12 +1,13 @@
-from random import randint, random
+from random import randint, random, choices
 from operator import add
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def individual(length, min, max):
     """ Create a member of the population.
     Takes the number of values per preson, and the min and max value of each person."""
-    return [randint(min, max) for x in range(length)]
+    return np.array([randint(min, max) for x in range(length)], dtype='int64')
 
 
 def population(count, length, min, max):
@@ -20,32 +21,55 @@ def population(count, length, min, max):
     return [individual(length, min, max) for x in range(count)]
 
 
-def fitness(individual, target):
+def fitness(individual, params):
     """
     Determine the fitness of an individual. Higher is better.
     individual: the individual to evaluate
     target: the target number individuals are aiming for
     """
-    # sum_values = sum(individual)
-    # fitness_function_basic = lambda x, y: abs(x - y)
-    polynomial = lambda x1, x2, x3, x4, x5, c: 25*x1**5 + 18*x2**4 + 31*x3**3 - 14*x4**2 + 7*x5 + c
-    fitness_function = lambda x: abs(x - polynomial(*individual)) 
-    return fitness_function(target)
+
+    target = params["target"]
+    polynomial_range, test_range, ex1 = params["poly_range"], params["test_range"], params["ex1"]
+
+    if ex1:
+        sum_values = np.sum(individual)
+        return 1 / np.absolute(target - sum_values)
+    
+    else:
+        # polynomial = lambda x1, x2, x3, x4, x5, c: 25*x1**5 + 18*x2**4 + 31*x3**3 - 14*x4**2 + 7*x5 + c
+        # fitness_function = lambda x: abs(x - polynomial(*individual)) 
+        
+        polynomial = np.polyval(individual, test_range) # 5th order polynomial template
+        _sum = np.sum(np.square(polynomial_range - polynomial))
+        
+        if _sum == 0:
+            return 1
+        else:
+            return 1 / _sum
 
 
-def grade(pop, target):
+def grade(pop, params):
     """ Find average fitness for a population."""
-    summed = sum(fitness(x, target) for x in pop)
+
+    summed = sum(fitness(x, params) for x in pop)
     return summed / (len(pop) * 1.0)
 
 
-def evolve(pop, target, retain=0.2, random_select=0.05, mutate=0.01):
-    graded = [(fitness(x, target), x) for x in pop]  
+def evolve(pop, evolve_parameters):
+
+    i_range  = evolve_parameters["i_range"]
+    retain, mutate, random_select = evolve_parameters["rt"], evolve_parameters["mut"], evolve_parameters["rs"]
+
+    graded = [(fitness(x, evolve_parameters), x) for x in pop]  
+
     # You check the fitness of all the population, and then put it into a tuple of (score, individual).
-    graded = [x[1] for x in sorted(graded)]
+
+
+    graded = [x[1] for x in sorted(graded, key=lambda x: x[0], reverse=True)]
     # Then sort the population by the fitness score (?), no key used but that is my assumption. 
     retain_length = int(len(graded) * retain)
     # Retain length is defined as a percentage of the fittest part of the population you keep.
+    
     parents = graded[:retain_length]
     # Remove the less fit individuals and make them the next parents. 
 
@@ -59,9 +83,15 @@ def evolve(pop, target, retain=0.2, random_select=0.05, mutate=0.01):
     # Mutate some individuals
     for individual in parents:
         if mutate > random():  # same as above, if the randint is less than mutate, mutate the individual. 
-            pos_to_mutate = randint(0, len(individual) - 1)
-            # this mutation is not ideal, because it restricts the range of possible values
-            individual[pos_to_mutate] = randint(min(individual), max(individual))
+            if evolve_parameters["ex1"]:
+                pos_to_mutate = randint(0, len(individual) - 1)
+            else:
+                pos_to_mutate = randint(0, len(individual) - 1)
+                # pos_to_mutate = choices([i for i in range(len(individual))], weights=[0.1, 0.1, 0.1, 0.2, 0.2, 0.3]) #[0.05, 0.075, 0.1, 0.15, 0.25, 0.525]  
+                # weighted since the first values are more impactful and the last values are not as impactful so I want them to vary much more than the rest. 
+            
+            # this mutation is not ideal, because it restricts the range of possible values <- CAUSED ME SO MANY PROBLEMS
+            individual[pos_to_mutate] = randint(-i_range, i_range)
             # This mutation chooses a random value of the individual and randomises it, 
             # bound to the min and max values of the individual, not the original min/max values. 
 
@@ -76,33 +106,45 @@ def evolve(pop, target, retain=0.2, random_select=0.05, mutate=0.01):
         if male != female:  # if they are the same individual, skip and try again. 
             male = parents[male]
             female = parents[female]
-            half = len(male) // 2
-            child = male[:half] + female[half:]  # combine half of the male and female individual values. 
-            children.append(child)
+            
+            # half = len(male)//2
+            # child = male[:half] + female[half:]
+            child = np.zeros(6, dtype="int64")
+
+            for i in range(len(male)):  # true random into child. 
+                m = randint(0, 1)
+                
+                if not m:
+                    child[i] = male[i]
+                else:
+                    child[i] = female[i]
+                    
+
+            children.append(np.array(child, dtype="int64"))
     parents.extend(children)
     return parents
 
 
-def run_example():
-    # Example usage
-    target = 550
-    p_count = 100
-    i_length = 6
-    i_min = 0
-    i_max = 100
-    generations = 100
+# def run_example():
+#     # Example usage
+#     target = 550
+#     p_count = 100
+#     i_length = 6
+#     i_min = 0
+#     i_max = 100
+#     generations = 100
 
-    p = population(p_count, i_length, i_min, i_max)
-    fitness_history = [grade(p, target)]
+#     p = population(p_count, i_length, i_min, i_max)
+#     fitness_history = [grade(p, target)]
 
-    for i in range(generations):
-        p = evolve(p, target)
-        fitness_history.append(grade(p, target))
+#     for i in range(generations):
+#         p = evolve(p, target)
+#         fitness_history.append(grade(p, target))
 
-    for datum in fitness_history:
-        print(datum)
+#     for datum in fitness_history:
+#         print(datum)
 
-    plt.plot(fitness_history)
-    plt.show()
+#     plt.plot(fitness_history)
+#     plt.show()
 
 

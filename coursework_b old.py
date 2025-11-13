@@ -1,9 +1,8 @@
-from genetic_algorithm import (population, evolve, grade, fitness)
+from genetic_algorithm import (population, evolve, grade)
 from random import randint
 import matplotlib.pyplot as plt
 import copy
-import numpy as np
-from tqdm import tqdm
+
 
 class RollingAvg:
     def __init__(self, size=10):
@@ -40,9 +39,11 @@ class GeneticAlgorithm:
             i_min=-1,
             i_max=-1):
         
-        self.target, self.pop_count = target, pop_count
+        self.target = target
+        self.pop_count = pop_count
         self.generations = generations
-        self.i_range, self.i_length = i_range, i_length
+        self.i_range = i_range
+        self.i_length = i_length
         self.evolution_parameters = evolution_parameters
         
         self.i_min = -self.i_range if i_min == -1 else i_min
@@ -55,87 +56,57 @@ class GeneticAlgorithm:
         self.last_choice = (0, 0)
 
     def single_run(self, verbose=False, plot=False, ex1=False):
+        # def run(target, pop_count, individual_length, i_min, i_max, evolution_parameters, generations, plot=False):
+        retain, random_select, mutate = self.evolution_parameters["retain"], \
+        self.evolution_parameters["random_select"], self.evolution_parameters["mutate"]
         
-        # test_range = np.array(tuple(set([randint(-100, 100) for i in range(100)])), dtype='int64')
-        test_range = np.linspace(-100, 100, 100, dtype="int64")
-        coeffs = np.array((25, 18, 31, -14, 7, -19), dtype='int64')
-        polynomial_range = np.polyval(coeffs, test_range)
-
-        params = {
-            "target": self.target,
-            "i_range": self.i_range,
-            "rt": self.evolution_parameters["retain"],
-            "rs": self.evolution_parameters["random_select"],
-            "mut": self.evolution_parameters["mutate"],
-            "poly_range": polynomial_range,
-            "test_range": test_range,
-            "ex1": ex1
-                }
-
         p = population(self.pop_count, self.i_length, self.i_min, self.i_max)
-        fitness_history = [grade(p, params)]
-        best_fitness_history = [fitness(p[0], params)]
+        fitness_history = [grade(p, self.target, ex1)]
 
-        for _ in tqdm(range(self.generations), leave=False, desc="Single run"): 
-            p = evolve(p, params)
-            fitness_history.append(grade(p, params))
-            best_fitness_history.append(fitness(p[0], params))
+        prev_fitness = fitness_history[0]
 
-            if not ex1:
-                condition = list(p[0]) == [25, 18, 31, -14, 7, -19]
-            else:
-                condition = sum(p[0]) == self.target
+        for _ in range(self.generations):
+            p = evolve(p, self.target, retain, random_select, mutate, ex1)
+            fitness_history.append(grade(p, self.target, ex1))
 
+            if prev_fitness / 2 > fitness_history[-1]:
+                #mutate -= 0.00005
+                #retain -= 0.0004
 
-            if condition:  # if the most recent run has a solution, end early.
+                prev_fitness = fitness_history[-1]
+
+            if fitness_history[-1] == self.target:
                 if verbose:
                     print(f"Required generations: {len(fitness_history)}, answer: {p[0]}")
+                if plot:
+                    plt.plot(fitness_history)
+                    plt.show()
 
                 self.stats["converged"] += 1
                 self.stats["generations_history"].append(len(fitness_history))
+
                 break
         
-        if not condition and verbose:
+        if self.target not in fitness_history and verbose:
             print(f"Never converges, last few value {fitness_history[-3:]}")
-            print(f"Best solution: {p[0]}")
-            # print(f"Current mutate: {mutate: .4f}, current retain: {retain: .4f}")
-
-        if plot:
-            self.plot_graph(params, p, fitness_history, best_fitness_history)
+        
+        print(f"Current mutate: {mutate: .4f}, current retain: {retain: .4f}")
 
         self.stats["fitness_history"].append(min(fitness_history))
 
         # return fitness_history
 
+
     def run(self, runs, verbose=False, plot=False):
 
         self.stats["runs"] = runs
 
-        print("Starting to run the GA...")
-
-        for _ in tqdm(range(runs), desc="All runs"):
+        for _ in range(runs):
             self.single_run(verbose, plot)
 
-    def plot_graph(self, params, pop, fitness_history, best_fitness_history):
+            # if _ % 10 == 0:
+            #     print(f"Processing {_} / {runs}")
 
-        
-        plt.subplot(1, 2, 1)
-        plt.title("Average and best fitness history")
-        plt.plot(fitness_history)
-        plt.plot(best_fitness_history)
-
-        if not params["ex1"]:
-            test_range, polynomial_range = params["test_range"], params["poly_range"]   
-
-            plt.subplot(1, 2, 2)
-            plt.title("Curve comparison")
-            plt.scatter(test_range, polynomial_range, color="red")  # test polynomial data
-
-            x = np.linspace(-100, 100, 500)
-            y = np.polyval(pop[0], x)  
-            plt.plot(x, y, color="blue")  # genetic algo data 
-
-        plt.show()
 
     def calc_stats(self):
         if len(self.stats["generations_history"]) == 0:
@@ -254,17 +225,24 @@ Total successes: {100*self.stats["avg_successes"]}%
                     self.evolution_parameters["mutate"] *= stat_change
 
 
-def find_a_number(target, i_length, i_range):
+def valid_target(target, i_max, individual_length):
+    if target > i_max * individual_length:  
+        # if the target is larger than the largest 
+        # possible product sum an individual can provide, return false
+        return False
+    return True
+
+
+
+def find_a_number(num):
+    target = num
     generations = 150  # maximum generations until giving up
-    p_count = 1000  # population count
-
-    evolution_parameters = {"retain": 0.1, 
-                            "random_select": 0.09, 
-                            "mutate": 0.01}  # evolution parameters
-
-    if abs(target) > i_range * i_length:
-        print(f"The number provided can't be summed by an individual of length {i_length} and a max value of {i_range} (Max absolute value: {i_range * i_length}).")
-        exit(-1)
+    p_count = 500  # population count
+    i_range = 50  # i range is used to calculate the range from i_min to i_max, with 0 as the midpoint. 
+    i_length = 10  # the length of the individual.
+    evolution_parameters = {"retain": 0.24, 
+                            "random_select": 0.05, 
+                            "mutate": 0.005}  # evolution params
 
     GA = GeneticAlgorithm(target, 
                           p_count, 
@@ -274,21 +252,22 @@ def find_a_number(target, i_length, i_range):
                           generations)
     
 
-    GA.single_run(ex1=True, verbose=True, plot=True)
+    GA.single_run(ex1=True)
     print(GA.stats)
+
 
 
 def main():
     
     # target = int(input("What value would you like to converge to?: "))
     target = 0
-    generations = 125
-    p_count = 2500
-    i_range = 50
+    generations = 150
+    p_count = 100
+    i_range = 20
     i_length = 6
-    evolution_parameters = {"retain": 0.2,
-                            "random_select": 0.1, 
-                            "mutate": 0.25}
+    evolution_parameters = {"retain": 0.24, 
+                            "random_select": 0.05, 
+                            "mutate": 0.005}
     
     # r: 0.1, rs: 0.045, m: 0.00167
 
@@ -297,8 +276,6 @@ def main():
     # r: 0.196 rs: 0.095 m: 0.00258
     # r: 0.163 rs: 0.137, m: 0.00219 
     # r: 0.149, rs: 0.131, m: 0.00275
-
-    # r: 0.15, rs: 0.1, m: 0.0035, p=2000, i_r: 20, ~70-80% success rate.  
 
     # if not valid_target(target, i_max, i_length):
     #     print("Non-valid target, too large!")
@@ -320,34 +297,9 @@ def main():
     # GA.evolution_parameters = results
 
     runs = 50
-    GA.run(runs, plot=False, verbose=False)
-    stats, fstats = GA.get_stats()
-    print(fstats)
-    plt.scatter([i for i in range(len(stats["generations_history"]))], stats["generations_history"])
-    plt.ylim(0, 100)
-    plt.show()
-
-def profile():
-    import cProfile, io, pstats
-    pr = cProfile.Profile()
-    pr.enable()
-    main()
-    pr.disable()
-    s = io.StringIO()
-    sortby = pstats.SortKey.TIME
-    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats()
-    
-    output = s.getvalue()
-    output_list = output.split("\n")
-    
-    for l in output_list[:40]:
-        components = l.split("   ")
-        print(l)
-
+    GA.run(runs, plot=False, verbose=True)
+    print(GA.get_stats()[1])
 
 if __name__ == "__main__":
-    # profile()
-    find_a_number(266, 10, 30)  # target, individual length, individual range of values (+- i_range)
-    # main()    
-    
+    # main()
+    find_a_number(211)

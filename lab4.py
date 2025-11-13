@@ -3,6 +3,8 @@ import math
 import scipy
 from ANN import NeuralNetwork
 import matplotlib.pyplot as plt 
+import pandas as pd
+
 
 def train(neural_network, output_nodes, training_data):
      # Load the MNIST 100 training samples CSV file into a list
@@ -67,9 +69,10 @@ def test(neural_network, test_data_list, verbose=False):
 
 
     scorecard_array = np.asarray(scorecard)
-    print("Performance = ", (scorecard_array.sum() / scorecard_array.size)*100, "%")
+    result = (scorecard_array.sum() / scorecard_array.size)
+    print("Performance = ", result*100, "%")
 
-    return incorrect_classifications
+    return result, incorrect_classifications
 
 
 def display_images(dict_list):
@@ -118,11 +121,11 @@ def preprocess_data(training_data):
 
 def main():
     input_nodes = 784
-    hidden_nodes = 250
+    # hidden_nodes = 125
     output_nodes = 10
-    learning_rate = 0.11
+    # learning_rate = 0.11
 
-    NN = NeuralNetwork(input_nodes, hidden_nodes, output_nodes, learning_rate)
+    # NN = NeuralNetwork(input_nodes, hidden_nodes, output_nodes, learning_rate)
     
     train_fp = "datasets/mnist_train.csv"
     test_fp = "datasets/mnist_test.csv"
@@ -137,12 +140,38 @@ def main():
         test_data_list = fs.readlines()
 
     # preprocess_data(training_data_list)
-    for i in range(5):
-        train(NN, output_nodes, training_data_list)
-        test(NN, test_data_list)
+
+    # for i in range(5):
+    #     train(NN, output_nodes, training_data_list)
+    #     test(NN, test_data_list)
     
-    ret = test(NN, test_data_list)
-    display_images(ret[1:12])
+    # ret = test(NN, test_data_list)
+    # display_images(ret[1:12])
+
+    df = pd.DataFrame()
+
+    for hn in range(10):
+        for lr in range(60):
+
+            lr_temp = (lr+1)/100
+            hn_temp = 100 + hn*10
+
+            print(f"{hn}/10, {lr}/60, USING h: {hn_temp}, lr: {lr_temp}")
+
+
+            NN_temp = NeuralNetwork(input_nodes, 
+                                    hn_temp,
+                                    output_nodes,
+                                    lr_temp)
+            
+            train(NN_temp, output_nodes, training_data_list)
+            res, _ = test(NN_temp, test_data_list)
+
+            df.at[lr, hn] = res
+    
+    df.to_csv("results.csv")
+
+
 
     # There is like 1 or 2 pretty much impossible images, the 5 is completely malformed. The rest is difficult but doable,
     # There is simply not enough training data. 
