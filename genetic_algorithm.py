@@ -1,16 +1,14 @@
 from random import randint, random, choices
-from operator import add
-import matplotlib.pyplot as plt
 import numpy as np
 
 
-def individual(length, min, max):
+def individual(length, _min, _max):
     """ Create a member of the population.
     Takes the number of values per preson, and the min and max value of each person."""
-    return np.array([randint(min, max) for x in range(length)], dtype='int64')
+    return np.array([randint(_min, _max) for x in range(length)], dtype='int64')
 
 
-def population(count, length, min, max):
+def population(count, length, _min, _max):
     """
     Create a number of individuals (i.e. a population).
     count: the number of individuals in the population
@@ -18,12 +16,12 @@ def population(count, length, min, max):
     min: the minimum possible value in an individual's list of values
     max: the maximum possible value in an individual's list of values
     """
-    return [individual(length, min, max) for x in range(count)]
+    return [individual(length, _min, _max) for x in range(count)]
 
 
 def fitness(individual, params):
     """
-    Determine the fitness of an individual. Higher is better.
+    Determine the fitness of an individual. Lower is better.
     individual: the individual to evaluate
     target: the target number individuals are aiming for
     """
@@ -33,19 +31,21 @@ def fitness(individual, params):
 
     if ex1:
         sum_values = np.sum(individual)
-        return 1 / np.absolute(target - sum_values)
-    
-    else:
-        # polynomial = lambda x1, x2, x3, x4, x5, c: 25*x1**5 + 18*x2**4 + 31*x3**3 - 14*x4**2 + 7*x5 + c
-        # fitness_function = lambda x: abs(x - polynomial(*individual)) 
-        
-        polynomial = np.polyval(individual, test_range) # 5th order polynomial template
-        _sum = np.sum(np.square(polynomial_range - polynomial))
-        
-        if _sum == 0:
+        _sum = np.absolute(target - sum_values)
+
+        if _sum == 0:  # catching zerodiv errors
             return 1
         else:
             return 1 / _sum
+    
+    else:
+
+        # Numpy-vectorised approach:
+        polynomial = np.polyval(individual, test_range) # 5th order polynomial template
+        # _sum = np.sum(np.square(polynomial_range - polynomial))  # numpy vectorised square difference sum
+        _sum = np.sum(np.abs(polynomial_range - polynomial))  # numpy vectorised square difference sum
+
+        return _sum
 
 
 def grade(pop, params):
@@ -56,8 +56,16 @@ def grade(pop, params):
 
 
 def evolve(pop, evolve_parameters):
+    """Evolve the population. 
 
-    i_range  = evolve_parameters["i_range"]
+    :param pop: Population of the GA
+    :type pop: list
+    :param evolve_parameters: Evolution parameters of the genetic algorithm
+    :type evolve_parameters: dict
+    :return: Population of the GA
+    :rtype: list
+    """
+    
     retain, mutate, random_select = evolve_parameters["rt"], evolve_parameters["mut"], evolve_parameters["rs"]
 
     graded = [(fitness(x, evolve_parameters), x) for x in pop]  
@@ -65,7 +73,7 @@ def evolve(pop, evolve_parameters):
     # You check the fitness of all the population, and then put it into a tuple of (score, individual).
 
 
-    graded = [x[1] for x in sorted(graded, key=lambda x: x[0], reverse=True)]
+    graded = [x[1] for x in sorted(graded, key=lambda x: x[0], reverse=False)]
     # Then sort the population by the fitness score (?), no key used but that is my assumption. 
     retain_length = int(len(graded) * retain)
     # Retain length is defined as a percentage of the fittest part of the population you keep.
@@ -91,7 +99,7 @@ def evolve(pop, evolve_parameters):
                 # weighted since the first values are more impactful and the last values are not as impactful so I want them to vary much more than the rest. 
             
             # this mutation is not ideal, because it restricts the range of possible values <- CAUSED ME SO MANY PROBLEMS
-            individual[pos_to_mutate] = randint(-i_range, i_range)
+            individual[pos_to_mutate] += randint(-5, 5)
             # This mutation chooses a random value of the individual and randomises it, 
             # bound to the min and max values of the individual, not the original min/max values. 
 
@@ -107,44 +115,19 @@ def evolve(pop, evolve_parameters):
             male = parents[male]
             female = parents[female]
             
-            # half = len(male)//2
-            # child = male[:half] + female[half:]
-            child = np.zeros(6, dtype="int64")
+            child = np.zeros(len(male), dtype="int64")  # empty child array
 
             for i in range(len(male)):  # true random into child. 
-                m = randint(0, 1)
+                m = randint(0, 1)  # choose between male and female parent
                 
                 if not m:
-                    child[i] = male[i]
+                    child[i] = male[i]  # put the gene into the child, gene by gene.
                 else:
                     child[i] = female[i]
                     
 
-            children.append(np.array(child, dtype="int64"))
+            children.append(child)  # add to children 
     parents.extend(children)
-    return parents
-
-
-# def run_example():
-#     # Example usage
-#     target = 550
-#     p_count = 100
-#     i_length = 6
-#     i_min = 0
-#     i_max = 100
-#     generations = 100
-
-#     p = population(p_count, i_length, i_min, i_max)
-#     fitness_history = [grade(p, target)]
-
-#     for i in range(generations):
-#         p = evolve(p, target)
-#         fitness_history.append(grade(p, target))
-
-#     for datum in fitness_history:
-#         print(datum)
-
-#     plt.plot(fitness_history)
-#     plt.show()
+    return parents  # return pop
 
 
