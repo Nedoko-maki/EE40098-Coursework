@@ -1,4 +1,5 @@
 __pycache__
-datasets
-"coursework_b old.py"
-"coursework_b rev1.py"
+coursework_a/datasets/*
+coursework_b/"coursework_b old.py"
+coursework_b/"coursework_b rev1.py"
+coursework_c/outputs/
